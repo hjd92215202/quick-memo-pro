@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- 登录界面 -->
+  <!-- 1. 登录界面 -->
   <div id="login-view" class="view-container" style="display: none;">
     <div class="memo-container">
       <h3>验证邮箱</h3>
@@ -20,15 +20,22 @@
     </div>
   </div>
 
-  <!-- 笔记界面 -->
+  <!-- 2. 主应用界面 -->
   <div id="app-view" class="view-container" style="display: none;">
     <div class="memo-container">
       <div class="user-header">
         <span id="user-email"></span>
-        <button id="logout-link" class="action-link">退出</button>
+        <div>
+          <button id="reset-pwd-link" class="action-link" style="margin-right:8px">主密码</button>
+          <button id="logout-link" class="action-link">退出</button>
+        </div>
       </div>
       <textarea id="memo-input" placeholder="输入灵感... (Ctrl+Enter保存)" autofocus></textarea>
       <div class="actions">
+        <label class="lock-toggle">
+          <input type="checkbox" id="lock-checkbox"> 
+          <span id="lock-icon">🔓</span> 敏感
+        </label>
         <span id="char-count">0 字 / 2万字</span>
         <button id="save-btn">保存记录</button>
       </div>
@@ -38,8 +45,22 @@
       最近记录
       <button id="export-md-btn">📤 导出 MD</button>
     </div>
-    
     <ul id="memo-list"></ul>
+  </div>
+
+  <!-- 3. 主密码设置/重置弹窗 -->
+  <div id="password-setup-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h4 id="setup-title">设置主密码</h4>
+      <p style="font-size:10px; color:#666">重置需先获取邮箱验证码</p>
+      <input type="text" id="setup-code-input" placeholder="验证码" class="form-input">
+      <input type="password" id="setup-pwd-input" placeholder="新主密码" class="form-input">
+      <div class="modal-actions">
+        <button id="get-setup-code-btn" class="secondary-btn">获取验证码</button>
+        <button id="save-pwd-btn">保存密码</button>
+        <button id="close-setup-btn" class="action-link">取消</button>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js" type="module"></script>

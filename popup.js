@@ -21,7 +21,16 @@ const els = {
   list: document.getElementById('memo-list'),
   charCount: document.getElementById('char-count'),
   exportBtn: document.getElementById('export-md-btn'),
-  logoutBtn: document.getElementById('logout-link')
+  logoutBtn: document.getElementById('logout-link'),
+  // 新增：安全与加锁相关元素 (对应 HTML 中的新 ID)
+  lockCheck: document.getElementById('lock-checkbox'), 
+  resetPwdBtn: document.getElementById('reset-pwd-link'),
+  setupModal: document.getElementById('password-setup-modal'),
+  setupCode: document.getElementById('setup-code-input'),
+  setupPwd: document.getElementById('setup-pwd-input'),
+  savePwdBtn: document.getElementById('save-pwd-btn'),
+  getSetupCodeBtn: document.getElementById('get-setup-code-btn'),
+  closeSetupBtn: document.getElementById('close-setup-btn')
 };
 
 /**
@@ -65,7 +74,7 @@ els.sendBtn.onclick = async () => {
     if (res.ok) {
       els.otpGroup.style.display = 'block';
       els.loginBtn.style.display = 'inline-block';
-      startCountdown(60);
+      startCountdown(60, els.sendBtn);
     } else {
       alert(data.error || "验证码发送失败");
       els.sendBtn.disabled = false;
@@ -79,17 +88,19 @@ els.sendBtn.onclick = async () => {
 };
 
 /**
- * 验证码倒计时
+ * 通用验证码倒计时
  */
-function startCountdown(s) {
+function startCountdown(s, btn) {
   let count = s;
+  const originalText = btn.innerText;
   const timer = setInterval(() => {
     count--;
-    els.sendBtn.innerText = `重发 (${count}s)`;
+    btn.innerText = `重发 (${count}s)`;
+    btn.disabled = true;
     if (count <= 0) {
       clearInterval(timer);
-      els.sendBtn.disabled = false;
-      els.sendBtn.innerText = "获取验证码";
+      btn.disabled = false;
+      btn.innerText = originalText;
     }
   }, 1000);
 }
@@ -124,7 +135,7 @@ els.loginBtn.onclick = async () => {
 };
 
 /**
- * 保存随手记
+ * 保存随手记 (支持加锁状态)
  */
 async function handleSave() {
   const content = els.input.value.trim();
@@ -132,6 +143,8 @@ async function handleSave() {
   if (content.length > 20000) return alert("超出2万字限制，请精简内容");
 
   const token = await getAuthToken();
+  const is_locked = els.lockCheck ? els.lockCheck.checked : false; // 获取勾选状态
+
   els.saveBtn.disabled = true;
   const originalText = els.saveBtn.innerText;
   els.saveBtn.innerText = "同步中...";
@@ -143,14 +156,19 @@ async function handleSave() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ content, source_url: "" })
+      body: JSON.stringify({ 
+        content, 
+        is_locked, // 发送锁定状态给后端
+        source_url: "" 
+      })
     });
 
     if (res.ok) {
       els.input.value = '';
+      if (els.lockCheck) els.lockCheck.checked = false; // 重置勾选
       updateCharCount();
       await loadMemos();
-      trackEvent('memo_saved_popup');
+      trackEvent('memo_saved_popup', { locked: is_locked });
     } else {
       const data = await res.json();
       if (res.status === 401) return handleLogout();
@@ -183,7 +201,7 @@ async function loadMemos() {
 }
 
 /**
- * 渲染记录列表
+ * 渲染记录列表 (处理锁定显示)
  */
 function renderList(memos) {
   els.list.innerHTML = '';
@@ -195,20 +213,35 @@ function renderList(memos) {
   memos.forEach(memo => {
     const li = document.createElement('li');
     li.className = 'memo-item';
+    const isLocked = memo.is_locked;
+
     li.innerHTML = `
-      <div class="memo-content"></div>
+      <div class="memo-content ${isLocked ? 'is-locked' : ''}" id="content-${memo.id}">
+        ${isLocked ? '🔒 该记录已加锁，请解锁查看' : ''}
+      </div>
       <span class="memo-time">${new Date(memo.created_at).toLocaleString()}</span>
       <div class="item-actions">
+        ${isLocked ? `<button class="action-link unlock-btn" data-id="${memo.id}">解锁</button>` : ''}
         <button class="action-link copy-btn">复制</button>
         <button class="action-link del-btn" data-id="${memo.id}">删除</button>
       </div>
     `;
     
-    // 使用 textContent 防止 XSS 攻击
-    li.querySelector('.memo-content').textContent = memo.content;
+    // 如果没锁，正常显示文字
+    if (!isLocked) {
+        li.querySelector('.memo-content').textContent = memo.content;
+    }
+
+    // 绑定解锁按钮
+    if (isLocked) {
+      li.querySelector('.unlock-btn').onclick = () => handleUnlock(memo);
+    }
 
     // 复制功能
     li.querySelector('.copy-btn').onclick = async () => {
+      const contentEl = document.getElementById(`content-${memo.id}`);
+      if (memo.is_locked && !contentEl.dataset.unlocked) return alert("请先解锁内容后再复制");
+      
       await navigator.clipboard.writeText(memo.content);
       const btn = li.querySelector('.copy-btn');
       btn.innerText = "已复制";
@@ -242,6 +275,100 @@ function renderList(memos) {
 }
 
 /**
+ * 解锁单条记录逻辑
+ */
+async function handleUnlock(memo) {
+  const pwd = prompt("请输入主密码解锁内容：");
+  if (!pwd) return;
+
+  const token = await getAuthToken();
+  try {
+    const res = await fetch(`${API_BASE}/notes/verify-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ password: pwd })
+    });
+
+    if (res.ok) {
+      const contentEl = document.getElementById(`content-${memo.id}`);
+      contentEl.textContent = memo.content; // 显示明文内容
+      contentEl.classList.remove('is-locked');
+      contentEl.dataset.unlocked = "true"; // 标记已解锁，允许复制
+      trackEvent('memo_unlocked');
+    } else {
+      alert("主密码错误或尚未设置");
+    }
+  } catch (e) {
+    alert("验证失败，请检查网络");
+  }
+}
+
+/**
+ * 主密码管理逻辑 (设置/重置)
+ */
+if (els.resetPwdBtn) {
+    els.resetPwdBtn.onclick = () => {
+        els.setupModal.style.display = 'flex';
+    };
+}
+
+if (els.closeSetupBtn) {
+    els.closeSetupBtn.onclick = () => {
+        els.setupModal.style.display = 'none';
+    };
+}
+
+// 在弹窗中获取重置验证码
+if (els.getSetupCodeBtn) {
+    els.getSetupCodeBtn.onclick = async () => {
+        const resData = await chrome.storage.local.get('user_email');
+        const email = resData.user_email;
+        
+        els.getSetupCodeBtn.disabled = true;
+        const res = await fetch(`${API_BASE}/auth/send-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (res.ok) {
+            alert("验证码已发送至您的邮箱");
+            startCountdown(60, els.getSetupCodeBtn);
+        } else {
+            els.getSetupCodeBtn.disabled = false;
+        }
+    };
+}
+
+// 保存新设置的主密码
+if (els.savePwdBtn) {
+    els.savePwdBtn.onclick = async () => {
+        const code = els.setupCode.value.trim();
+        const newPassword = els.setupPwd.value.trim();
+        const resData = await chrome.storage.local.get('user_email');
+        
+        if (newPassword.length < 4) return alert("为了安全，密码至少4位以上");
+        if (!code) return alert("请输入邮件中的验证码");
+
+        const res = await fetch(`${API_BASE}/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: resData.user_email, code, newPassword })
+        });
+
+        if (res.ok) {
+            alert("主密码已成功更新！请妥善保管。");
+            els.setupModal.style.display = 'none';
+            els.setupCode.value = '';
+            els.setupPwd.value = '';
+            trackEvent('master_password_changed');
+        } else {
+            const d = await res.json();
+            alert(d.error || "重置失败");
+        }
+    };
+}
+
+/**
  * 执行删除请求
  */
 async function executeDelete(id) {
@@ -267,7 +394,6 @@ els.exportBtn.onclick = async () => {
   els.exportBtn.innerText = "导出中...";
   const token = await getAuthToken();
   try {
-    // 重新获取全部记录（不带 Limit）
     const res = await fetch(`${API_BASE}/notes`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -277,7 +403,9 @@ els.exportBtn.onclick = async () => {
 
     let md = `# 我的随手记合集\n\n> 导出时间：${new Date().toLocaleString()}\n\n---\n\n`;
     memos.forEach(m => {
-      md += `### 📅 ${new Date(m.created_at).toLocaleString()}\n\n${m.content}\n\n`;
+      // 导出时，被锁定的内容如果没在当前界面解锁，依然是导出加密文字或由后端控制
+      const content = m.is_locked ? "[🔒 敏感记录 - 已加密]" : m.content;
+      md += `### 📅 ${new Date(m.created_at).toLocaleString()}\n\n${content}\n\n`;
       if (m.source_url) md += `*来源: ${m.source_url}*\n`;
       md += `\n---\n\n`;
     });
@@ -317,11 +445,8 @@ function updateCharCount() {
 
 // --- 事件监听绑定 ---
 
-// 按钮点击
 els.saveBtn.onclick = handleSave;
 els.logoutBtn.onclick = handleLogout;
-
-// 输入监听
 els.input.oninput = updateCharCount;
 
 // 快捷键支持：Ctrl/Cmd + Enter 保存
