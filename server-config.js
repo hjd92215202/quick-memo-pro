@@ -1,6 +1,6 @@
 export const API_BASE = "https://api.oneday.ren/api";
 export const UMAMI_URL = "https://umami.oneday.ren/api/send";
-export const UMAMI_ID = "你的-UMAMI-网站ID"; // 请在Umami后台创建网站后填入这里
+export const UMAMI_ID = "0f546ad9-7cfd-4b3d-b850-72c45679f95d"; // 请在Umami后台创建网站后填入这里
 
 // 获取持久化的 JWT Token
 export async function getAuthToken() {
