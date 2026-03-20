@@ -11,6 +11,7 @@
   ],
   "host_permissions": [
     "https://*.firestore.googleapis.com/*",
+    "https://*.firebase.google.com/*",
     "https://www.google-analytics.com/*"
   ],
   "background": {
