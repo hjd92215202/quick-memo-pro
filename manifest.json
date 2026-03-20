@@ -5,7 +5,6 @@
   "description": "灵感闪现，随时记录。支持云同步、Markdown 导出及右键采集。",
   "permissions": [
     "contextMenus",
-    "identity",
     "storage",
     "notifications"
   ],
