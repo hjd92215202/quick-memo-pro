@@ -30,32 +30,69 @@ async function handleSave() {
     const originalBtnText = saveBtn.innerText;
     saveBtn.innerText = "同步中...";
     
-    // 1. 获取通过 Firebase Auth 验证的 UID
     const uid = await ensureAuth();
     
-    // 2. 写入云端
     await addDoc(collection(db, "user_content"), {
       userId: uid,
       pluginId: PLUGIN_ID,
       type: "text",
       content: content,
-      timestamp: serverTimestamp() // 服务器时间
+      timestamp: serverTimestamp()
     });
     
-    // 3. UI 清理与反馈
     input.value = '';
     updateCharCount(); 
     saveBtn.innerText = originalBtnText;
     
-    await loadMemos(); // 刷新预览列表
+    await loadMemos(); 
     trackEvent('memo_saved_popup', { length: content.length });
     
   } catch (e) {
     console.error("保存失败:", e);
-    alert("保存失败，请检查网络或控制台报错");
+    alert("保存失败，请检查网络");
     saveBtn.innerText = "保存记录";
   } finally {
     saveBtn.disabled = false;
+  }
+}
+
+/**
+ * 处理两步确认删除逻辑
+ * @param {HTMLElement} btn 点击的按钮元素
+ */
+async function handleDelete(btn) {
+  const docId = btn.dataset.id;
+
+  // 第一步：进入确认状态
+  if (btn.dataset.confirm !== "true") {
+    const originalText = btn.textContent;
+    btn.dataset.confirm = "true";
+    btn.textContent = "确定删除？";
+    btn.style.color = "#dc322f"; // 变红
+    btn.style.fontWeight = "bold";
+
+    // 3秒后如果没有再次点击，恢复原状
+    setTimeout(() => {
+      if (btn && btn.isConnected) {
+        btn.dataset.confirm = "false";
+        btn.textContent = originalText;
+        btn.style.color = "";
+        btn.style.fontWeight = "";
+      }
+    }, 3000);
+    return;
+  }
+
+  // 第二步：执行真正的删除逻辑
+  try {
+    btn.disabled = true;
+    btn.textContent = "删除中...";
+    await deleteDoc(doc(db, "user_content", docId));
+    await loadMemos(); // 重新加载列表
+    trackEvent('memo_deleted');
+  } catch (err) {
+    console.error("删除失败:", err);
+    alert("删除失败，请重试");
   }
 }
 
@@ -71,14 +108,14 @@ async function loadMemos() {
       where("userId", "==", uid),
       where("pluginId", "==", PLUGIN_ID),
       orderBy("timestamp", "desc"),
-      limit(3) // 只显示最近 3 条
+      limit(3)
     );
 
     const snapshot = await getDocs(q);
-    list.innerHTML = ''; // 清空列表
+    list.innerHTML = '';
     
     if (snapshot.empty) {
-      list.innerHTML = '<li style="text-align:center; color:#999; font-size:12px; padding:20px;">还没有记录，开始写第一条吧！</li>';
+      list.innerHTML = '<li style="text-align:center; color:#999; font-size:12px; padding:20px;">还没有记录</li>';
       return;
     }
 
@@ -87,18 +124,15 @@ async function loadMemos() {
       const li = document.createElement('li');
       li.className = 'memo-item';
       
-      // 1. 创建内容容器（使用 textContent 预防 XSS）
       const contentEl = document.createElement('div');
       contentEl.className = 'memo-content';
       contentEl.textContent = data.content; 
       
-      // 2. 处理时间戳
       const timeStr = data.timestamp ? data.timestamp.toDate().toLocaleString() : '云端同步中...';
       const timeEl = document.createElement('span');
       timeEl.className = 'memo-time';
       timeEl.textContent = timeStr;
       
-      // 3. 创建操作按钮栏
       const actionsEl = document.createElement('div');
       actionsEl.className = 'item-actions';
       actionsEl.innerHTML = `
@@ -106,18 +140,20 @@ async function loadMemos() {
         <button class="action-link del del-btn" data-id="${memoDoc.id}">删除</button>
       `;
       
-      // 4. 组装元素
       li.appendChild(contentEl);
       li.appendChild(timeEl);
       li.appendChild(actionsEl);
       
-      // 绑定“复制”点击事件（闭包处理，避免 data-attribute 泄露内容）
+      // 复制事件绑定
       li.querySelector('.copy-btn').onclick = async (e) => {
         await navigator.clipboard.writeText(data.content);
-        const btn = e.target;
-        btn.textContent = '已复制';
-        setTimeout(() => btn.textContent = '复制', 1000);
+        const copyBtn = e.target;
+        copyBtn.textContent = '已复制';
+        setTimeout(() => copyBtn.textContent = '复制', 1000);
       };
+
+      // 删除事件绑定 (调用两步确认函数)
+      li.querySelector('.del-btn').onclick = (e) => handleDelete(e.target);
 
       list.appendChild(li);
     });
@@ -146,7 +182,7 @@ async function exportToMarkdown() {
 
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
-      alert("没有可导出的数据");
+      alert("没有记录可导出");
       return;
     }
 
@@ -170,45 +206,22 @@ async function exportToMarkdown() {
     trackEvent('export_md_success');
   } catch (e) {
     console.error("导出失败:", e);
-    alert("导出失败，请检查网络连接");
   } finally {
     exportBtn.innerText = "📤 导出 MD";
   }
 }
 
-// --- 事件绑定 ---
+// --- 事件监听 ---
 
-// 保存按钮
 saveBtn.addEventListener('click', handleSave);
-
-// 导出按钮
 exportBtn.addEventListener('click', exportToMarkdown);
-
-// 输入框动态计数
 input.addEventListener('input', updateCharCount);
 
-// 快捷键支持 (Ctrl/Cmd + Enter)
 input.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     handleSave();
   }
 });
 
-// 处理全局点击（针对动态生成的删除按钮）
-document.addEventListener('click', async (e) => {
-  if (e.target.classList.contains('del-btn')) {
-    const docId = e.target.dataset.id;
-    if (confirm('确定要从云端删除这条灵感吗？')) {
-      try {
-        await deleteDoc(doc(db, "user_content", docId));
-        await loadMemos(); // 重新加载
-        trackEvent('memo_deleted');
-      } catch (err) {
-        console.error("删除失败:", err);
-      }
-    }
-  }
-});
-
-// 首次打开自动加载
+// 初始加载
 loadMemos();
