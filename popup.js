@@ -2,32 +2,30 @@ import { API_BASE, getAuthToken, setAuthToken, logout } from './server-config.js
 import { trackEvent } from './analytics.js';
 
 // --- 全局交互状态 ---
-let memoToUnlock = null; // 存储当前尝试解锁的笔记记录
+let memoToUnlock = null; // 存储当前正在尝试解锁的记录对象
 
-// --- DOM 元素引用 ---
+// --- DOM 元素引用 (统一管理，确保不出现 undefined) ---
 const els = {
-  // 提示容器
+  // 提示与全局容器
   toastContainer: document.getElementById('toast-container'),
-  // 视图容器 (修复此处，确保 initView 引用正确)
   loginView: document.getElementById('login-view'),
   appView: document.getElementById('app-view'),
-  // 登录相关
+  // 登录界面元素
   email: document.getElementById('email-input'),
   code: document.getElementById('code-input'),
   sendBtn: document.getElementById('send-code-btn'),
   loginBtn: document.getElementById('login-btn'),
   otpGroup: document.getElementById('otp-group'),
-  // 主界面相关
+  // 主应用界面元素
   userEmail: document.getElementById('user-email'),
-  titleInput: document.getElementById('memo-title'), // 标题输入
-  input: document.getElementById('memo-input'),      // 内容输入
+  titleInput: document.getElementById('memo-title'),
+  input: document.getElementById('memo-input'),
   saveBtn: document.getElementById('save-btn'),
   list: document.getElementById('memo-list'),
   charCount: document.getElementById('char-count'),
+  lockCheck: document.getElementById('lock-checkbox'),
   exportBtn: document.getElementById('export-md-btn'),
   logoutBtn: document.getElementById('logout-link'),
-  // 安全与加锁相关
-  lockCheck: document.getElementById('lock-checkbox'), 
   resetPwdBtn: document.getElementById('reset-pwd-link'),
   // 主密码设置弹窗 (Setup Modal)
   setupModal: document.getElementById('password-setup-modal'),
@@ -36,7 +34,7 @@ const els = {
   savePwdBtn: document.getElementById('save-pwd-btn'),
   getSetupCodeBtn: document.getElementById('get-setup-code-btn'),
   closeSetupBtn: document.getElementById('close-setup-btn'),
-  // 验证主密码弹窗 (Verify Modal - 替代原 prompt)
+  // 验证主密码弹窗 (Verify Modal)
   verifyModal: document.getElementById('password-verify-modal'),
   verifyInput: document.getElementById('verify-pwd-input'),
   confirmVerifyBtn: document.getElementById('confirm-verify-btn'),
@@ -44,9 +42,7 @@ const els = {
 };
 
 /**
- * 提示系统：代替原生 alert
- * @param {string} msg 
- * @param {'info'|'success'|'error'} type 
+ * 自定义提示系统 (替代原生 alert)
  */
 function showToast(msg, type = 'info') {
     if (!els.toastContainer) return;
@@ -62,18 +58,22 @@ function showToast(msg, type = 'info') {
 
 /**
  * 初始化界面：检查登录状态并切换视图
+ * 修复了变量引用不一致导致的 style 报错问题
  */
 async function initView() {
+  // 统计页面访问
+  trackEvent('view_popup');
+  
   const token = await getAuthToken();
   
-  // 健壮性检查
+  // 防御性检查
   if (!els.loginView || !els.appView) return;
 
   if (token) {
     els.loginView.style.display = 'none';
     els.appView.style.display = 'block';
     
-    // 显示用户邮箱
+    // 加载并显示用户邮箱
     const res = await chrome.storage.local.get('user_email');
     if (res.user_email && els.userEmail) els.userEmail.innerText = res.user_email;
     
@@ -84,15 +84,14 @@ async function initView() {
   }
 }
 
-/**
- * 验证码获取逻辑
- */
+// --- 身份验证逻辑 ---
+
 els.sendBtn.onclick = async () => {
   const email = els.email.value.trim();
   if (!email || !email.includes('@')) return showToast("请输入有效的邮箱地址", "error");
 
   els.sendBtn.disabled = true;
-  els.sendBtn.innerText = "正在发送...";
+  els.sendBtn.innerText = "发送中...";
   try {
     const res = await fetch(`${API_BASE}/auth/send-code`, {
       method: 'POST',
@@ -106,7 +105,6 @@ els.sendBtn.onclick = async () => {
       els.otpGroup.style.display = 'block';
       els.loginBtn.style.display = 'block';
       els.sendBtn.style.display = 'none';
-      // 启动倒计时，但因为 sendBtn 被隐藏，逻辑在 startCountdown 里处理
       startCountdown(60, els.sendBtn); 
     } else {
       showToast(data.error || "验证码发送失败", "error");
@@ -114,34 +112,11 @@ els.sendBtn.onclick = async () => {
       els.sendBtn.innerText = "获取验证码";
     }
   } catch (e) {
-    showToast("连接服务器失败", "error");
+    showToast("无法连接服务器", "error");
     els.sendBtn.disabled = false;
-    els.sendBtn.innerText = "获取验证码";
   }
 };
 
-/**
- * 通用验证码倒计时
- */
-function startCountdown(s, btn) {
-  let count = s;
-  const originalText = "获取验证码";
-  const timer = setInterval(() => {
-    count--;
-    btn.innerText = `重发 (${count}s)`;
-    btn.disabled = true;
-    if (count <= 0) {
-      clearInterval(timer);
-      btn.disabled = false;
-      btn.innerText = originalText;
-      btn.style.display = 'block'; // 如果之前隐藏了，重新显示
-    }
-  }, 1000);
-}
-
-/**
- * 登录逻辑
- */
 els.loginBtn.onclick = async () => {
   const email = els.email.value.trim();
   const code = els.code.value.trim();
@@ -159,30 +134,26 @@ els.loginBtn.onclick = async () => {
       await setAuthToken(data.token);
       await chrome.storage.local.set({ 'user_email': email });
       initView();
-      showToast("登录成功，欢迎使用", "success");
+      showToast("登录成功", "success");
       trackEvent('login_success');
     } else {
       showToast(data.error || "验证码错误", "error");
     }
-  } catch (e) {
-    showToast("登录请求失败", "error");
-  }
+  } catch (e) { showToast("登录失败", "error"); }
 };
 
-/**
- * 保存随手记 (支持标题、加锁和 Toast 反馈)
- */
+// --- 随手记核心业务逻辑 ---
+
 async function handleSave() {
   const title = els.titleInput.value.trim();
   const content = els.input.value.trim();
   if (!content) return;
-  if (content.length > 20000) return showToast("字数超出限制", "error");
+  if (content.length > 20000) return showToast("超出2万字限制", "error");
 
   const token = await getAuthToken();
   const is_locked = els.lockCheck ? els.lockCheck.checked : false;
 
   els.saveBtn.disabled = true;
-  const originalText = els.saveBtn.innerText;
   els.saveBtn.innerText = "同步中...";
 
   try {
@@ -206,24 +177,20 @@ async function handleSave() {
       if (els.lockCheck) els.lockCheck.checked = false;
       updateCharCount();
       await loadMemos();
-      showToast("已安全保存至云端", "success");
-      trackEvent('memo_saved_popup', { locked: is_locked });
+      showToast("已安全保存", "success");
+      trackEvent('memo_saved', { locked: is_locked });
     } else {
       const data = await res.json();
       if (res.status === 401) return handleLogout();
-      showToast(data.error || "云端同步失败", "error");
+      showToast(data.error || "保存失败", "error");
     }
-  } catch (e) {
-    showToast("无法连接云端，请检查网络", "error");
-  } finally {
+  } catch (e) { showToast("连接云端异常", "error"); }
+  finally {
     els.saveBtn.disabled = false;
-    els.saveBtn.innerText = originalText;
+    els.saveBtn.innerText = "保存记录";
   }
 }
 
-/**
- * 加载最近记录
- */
 async function loadMemos() {
   const token = await getAuthToken();
   try {
@@ -231,21 +198,15 @@ async function loadMemos() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.status === 401) return handleLogout();
-    
     const data = await res.json();
     renderList(data);
-  } catch (e) {
-    els.list.innerHTML = '<li style="text-align:center; color:#dc322f; font-size:11px; padding:10px;">连接云端失败</li>';
-  }
+  } catch (e) { showToast("加载记录失败", "error"); }
 }
 
-/**
- * 渲染记录列表 (处理标题与锁定显示)
- */
 function renderList(memos) {
   els.list.innerHTML = '';
   if (!memos || memos.length === 0) {
-    els.list.innerHTML = '<li style="text-align:center; color:#999; font-size:12px; padding:20px;">记录本还是空的</li>';
+    els.list.innerHTML = '<li style="text-align:center; color:#999; font-size:12px; padding:20px;">记录本是空的</li>';
     return;
   }
 
@@ -257,7 +218,7 @@ function renderList(memos) {
     li.innerHTML = `
       <div class="memo-title-display"></div>
       <div class="memo-content ${isLocked ? 'is-locked' : ''}" id="txt-${memo.id}">
-        ${isLocked ? '🔒 该记录已加锁，解锁后可查看/复制' : ''}
+        ${isLocked ? '🔒 该记录已加锁，解锁后可查看' : ''}
       </div>
       <span class="memo-time">${new Date(memo.created_at).toLocaleString()}</span>
       <div class="item-actions">
@@ -271,46 +232,37 @@ function renderList(memos) {
     li.querySelector('.memo-title-display').textContent = memo.title || '未命名记录';
     if (!isLocked) {
         li.querySelector('.memo-content').textContent = memo.content;
+    } else {
+        // 绑定自定义 Modal 解锁事件
+        li.querySelector('.unlock-btn').onclick = () => {
+            memoToUnlock = memo;
+            els.verifyModal.style.display = 'flex';
+            els.verifyInput.value = '';
+            els.verifyInput.focus();
+        };
     }
 
-    // 绑定解锁
-    if (isLocked) {
-      li.querySelector('.unlock-btn').onclick = () => {
-        memoToUnlock = memo;
-        els.verifyModal.style.display = 'flex';
-        els.verifyInput.value = '';
-        els.verifyInput.focus();
-      };
-    }
-
-    // 复制功能 (带锁校验)
+    // 复制功能 (带解密校验)
     li.querySelector('.copy-btn').onclick = async () => {
       const contentEl = document.getElementById(`txt-${memo.id}`);
       if (memo.is_locked && !contentEl.dataset.unlocked) return showToast("敏感内容请先解锁", "error");
       
-      await navigator.clipboard.writeText(memo.content);
+      await navigator.clipboard.writeText(contentEl.textContent);
       showToast("内容已复制", "success");
     };
 
-    // 两步确认删除逻辑 (完整保留)
+    // 二步确认删除逻辑
     const delBtn = li.querySelector('.del-btn');
-    delBtn.onclick = async () => {
+    delBtn.onclick = () => {
       if (delBtn.dataset.confirm === "true") {
-        delBtn.disabled = true;
-        delBtn.innerText = "...";
-        await executeDelete(memo.id);
+        executeDelete(memo.id, delBtn);
       } else {
         delBtn.dataset.confirm = "true";
         delBtn.innerText = "确定？";
-        delBtn.style.color = "#dc322f";
+        delBtn.style.color = "var(--danger)";
         delBtn.style.fontWeight = "bold";
-        setTimeout(() => {
-          if (delBtn) {
-            delBtn.dataset.confirm = "false";
-            delBtn.innerText = "删除";
-            delBtn.style.color = "";
-            delBtn.style.fontWeight = "";
-          }
+        setTimeout(() => { 
+          if (delBtn) { delBtn.dataset.confirm = "false"; delBtn.innerText = "删除"; delBtn.style.color = ""; delBtn.style.fontWeight = ""; } 
         }, 3000);
       }
     };
@@ -318,51 +270,41 @@ function renderList(memos) {
   });
 }
 
-/**
- * 解锁单条记录逻辑 (对接 Verify Modal)
- */
+// --- 密码管理交互 (Modal) ---
+
+// 1. 提交主密码进行解密
 els.confirmVerifyBtn.onclick = async () => {
     const password = els.verifyInput.value;
     if (!password) return;
 
     const token = await getAuthToken();
     try {
-        const res = await fetch(`${API_BASE}/notes/verify-password`, {
+        const res = await fetch(`${API_BASE}/notes/${memoToUnlock.id}/unlock`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ password })
         });
+        const data = await res.json();
 
         if (res.ok) {
-            const contentEl = document.getElementById(`txt-${memoToUnlock.id}`);
-            contentEl.textContent = memoToUnlock.content;
-            contentEl.classList.remove('is-locked');
-            contentEl.dataset.unlocked = "true"; // 允许复制
+            const el = document.getElementById(`txt-${memoToUnlock.id}`);
+            el.textContent = data.content; // 接收后端传回的真实明文
+            el.classList.remove('is-locked');
+            el.dataset.unlocked = "true"; // 标记为已解锁，允许复制
             els.verifyModal.style.display = 'none';
-            showToast("解锁成功", "success");
+            showToast("解密成功", "success");
             trackEvent('memo_unlocked');
         } else {
-            showToast("主密码错误", "error");
+            showToast(data.error || "主密码错误", "error");
         }
-    } catch (e) {
-        showToast("验证失败", "error");
-    }
+    } catch (e) { showToast("解密异常", "error"); }
 };
 
+// 2. 主密码重置/设置流程
+els.resetPwdBtn.onclick = () => { els.setupModal.style.display = 'flex'; };
+els.closeSetupBtn.onclick = () => { els.setupModal.style.display = 'none'; };
 els.closeVerifyBtn.onclick = () => { els.verifyModal.style.display = 'none'; };
 
-/**
- * 主密码管理逻辑 (设置/重置)
- */
-if (els.resetPwdBtn) {
-    els.resetPwdBtn.onclick = () => { els.setupModal.style.display = 'flex'; };
-}
-
-if (els.closeSetupBtn) {
-    els.closeSetupBtn.onclick = () => { els.setupModal.style.display = 'none'; };
-}
-
-// 弹窗中发送验证码
 els.getSetupCodeBtn.onclick = async () => {
     const resData = await chrome.storage.local.get('user_email');
     els.getSetupCodeBtn.disabled = true;
@@ -373,19 +315,18 @@ els.getSetupCodeBtn.onclick = async () => {
             body: JSON.stringify({ email: resData.user_email })
         });
         if (res.ok) {
-            showToast("验证码已发往邮箱", "success");
+            showToast("验证码已发送至邮箱", "success");
             startCountdown(60, els.getSetupCodeBtn);
         } else { els.getSetupCodeBtn.disabled = false; }
     } catch (e) { els.getSetupCodeBtn.disabled = false; }
 };
 
-// 提交新密码
 els.savePwdBtn.onclick = async () => {
     const code = els.setupCodeInput.value.trim();
     const newPassword = els.setupPwdInput.value.trim();
     const resData = await chrome.storage.local.get('user_email');
     
-    if (newPassword.length < 4) return showToast("密码至少4位", "error");
+    if (newPassword.length < 4) return showToast("密码至少4位以上", "error");
     if (!code) return showToast("请输入验证码", "error");
 
     try {
@@ -395,7 +336,7 @@ els.savePwdBtn.onclick = async () => {
             body: JSON.stringify({ email: resData.user_email, code, newPassword })
         });
         if (res.ok) {
-            showToast("主密码已成功更新", "success");
+            showToast("主密码更新成功！", "success");
             els.setupModal.style.display = 'none';
             els.setupCodeInput.value = '';
             els.setupPwdInput.value = '';
@@ -404,14 +345,14 @@ els.savePwdBtn.onclick = async () => {
             const d = await res.json();
             showToast(d.error || "更新失败", "error");
         }
-    } catch (e) { showToast("请求失败", "error"); }
+    } catch (e) { showToast("操作失败", "error"); }
 };
 
-/**
- * 执行删除请求
- */
-async function executeDelete(id) {
+// --- 其他通用辅助逻辑 ---
+
+async function executeDelete(id, btn) {
   const token = await getAuthToken();
+  btn.disabled = true;
   try {
     const res = await fetch(`${API_BASE}/notes/${id}`, {
       method: 'DELETE',
@@ -419,56 +360,58 @@ async function executeDelete(id) {
     });
     if (res.ok) {
       await loadMemos();
-      showToast("已成功删除记录");
+      showToast("已删除记录", "info");
       trackEvent('memo_deleted');
     }
-  } catch (e) {
-    showToast("删除请求失败", "error");
-  }
+  } catch (e) { showToast("删除请求失败", "error"); btn.disabled = false; }
 }
 
-/**
- * 导出 Markdown 逻辑 (包含标题)
- */
 els.exportBtn.onclick = async () => {
-  els.exportBtn.innerText = "生成中...";
+  els.exportBtn.innerText = "导出中...";
   const token = await getAuthToken();
   try {
     const res = await fetch(`${API_BASE}/notes`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const memos = await res.json();
-    
     if (!memos || memos.length === 0) return showToast("无记录可导出", "info");
 
     let md = `# 我的随手记合集\n\n> 导出时间：${new Date().toLocaleString()}\n\n---\n\n`;
     memos.forEach(m => {
       const title = m.title || '未命名记录';
-      const content = m.is_locked ? "[🔒 敏感内容 - 导出前请先解锁]" : m.content;
+      const content = m.is_locked ? "[🔒 敏感内容 - 导出前请在插件内解锁]" : m.content;
       md += `### 📌 ${title}\n`;
-      md += `> 📅 ${new Date(m.created_at).toLocaleString()}\n\n${content}\n\n`;
-      if (m.source_url) md += `*来源: ${m.source_url}*\n`;
-      md += `\n---\n\n`;
+      md += `> 📅 ${new Date(m.created_at).toLocaleString()}\n\n${content}\n\n---\n\n`;
     });
 
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Memos_Backup_${new Date().toISOString().slice(0,10)}.md`;
+    a.download = `Memo_Backup_${new Date().toISOString().slice(0,10)}.md`;
     a.click();
     showToast("导出成功", "success");
     trackEvent('export_success');
-  } catch (e) {
-    showToast("生成文件失败", "error");
-  } finally {
-    els.exportBtn.innerText = "📤 导出 MD";
-  }
+  } catch (e) { showToast("生成文件失败", "error"); }
+  finally { els.exportBtn.innerText = "📤 导出 MD"; }
 };
 
-/**
- * 退出登录逻辑
- */
+function startCountdown(s, btn) {
+    let count = s;
+    const oldText = btn.innerText;
+    const timer = setInterval(() => {
+        count--;
+        btn.innerText = `${count}s`;
+        btn.disabled = true;
+        if (count <= 0) {
+            clearInterval(timer);
+            btn.disabled = false;
+            btn.innerText = oldText;
+            btn.style.display = 'block';
+        }
+    }, 1000);
+}
+
 function handleLogout() {
   logout();
   chrome.storage.local.remove(['user_email', 'auth_token'], () => {
@@ -477,9 +420,6 @@ function handleLogout() {
   });
 }
 
-/**
- * 更新字符计数
- */
 function updateCharCount() {
   const len = els.input.value.length;
   els.charCount.textContent = `${len} 字 / 2万字`;
@@ -495,5 +435,5 @@ els.input.onkeydown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSave();
 };
 
-// 启动初始化
+// --- 初始化启动 ---
 initView();
