@@ -5,20 +5,42 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="memo-container">
-    <textarea id="memo-input" placeholder="输入灵感... (Ctrl+Enter保存)" autofocus></textarea>
-    <div class="actions">
-      <span id="char-count">0 字</span>
-      <button id="save-btn">保存记录</button>
+  <!-- 登录界面 -->
+  <div id="login-view" class="view-container" style="display: none;">
+    <div class="memo-container">
+      <h3>验证邮箱</h3>
+      <input type="email" id="email-input" placeholder="输入邮箱地址" class="form-input">
+      <div id="otp-group" style="display: none; margin-top: 10px;">
+        <input type="text" id="code-input" placeholder="6位验证码" class="form-input">
+      </div>
+      <div class="actions">
+        <button id="send-code-btn">获取验证码</button>
+        <button id="login-btn" style="display: none;">验证登录</button>
+      </div>
     </div>
   </div>
 
-  <div class="recent-title">
-    最近记录
-    <button id="export-md-btn">📤 导出 MD</button>
+  <!-- 笔记界面 -->
+  <div id="app-view" class="view-container" style="display: none;">
+    <div class="memo-container">
+      <div class="user-header">
+        <span id="user-email"></span>
+        <button id="logout-link" class="action-link">退出</button>
+      </div>
+      <textarea id="memo-input" placeholder="输入灵感... (Ctrl+Enter保存)" autofocus></textarea>
+      <div class="actions">
+        <span id="char-count">0 字 / 2万字</span>
+        <button id="save-btn">保存记录</button>
+      </div>
+    </div>
+
+    <div class="recent-title">
+      最近记录
+      <button id="export-md-btn">📤 导出 MD</button>
+    </div>
+    
+    <ul id="memo-list"></ul>
   </div>
-  
-  <ul id="memo-list"></ul>
 
   <script src="popup.js" type="module"></script>
 </body>

@@ -1,15 +1,23 @@
 body { width: 320px; font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #fdf6e3; padding: 12px; color: #333; }
 .memo-container { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 10px; margin-bottom: 15px; }
 textarea { width: 100%; height: 100px; border: none; outline: none; resize: none; font-size: 14px; background: transparent; }
+.form-input { width: 93%; padding: 8px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 5px; }
+
+.user-header { display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-bottom: 8px; }
 .actions { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding-top: 8px; margin-top: 5px; }
 #char-count { font-size: 11px; color: #999; }
 button { background: #268bd2; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+button:disabled { background: #ccc; }
 button:hover { opacity: 0.8; }
+
 .recent-title { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #859900; font-weight: bold; margin-bottom: 10px; }
 #export-md-btn { background: none; color: #268bd2; border: 1px solid #268bd2; padding: 1px 5px; font-size: 10px; }
+
 ul { list-style: none; padding: 0; }
 .memo-item { background: rgba(255,255,255,0.7); padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #b58900; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.memo-content { white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
 .memo-time { font-size: 10px; color: #999; margin-top: 5px; display: block; }
+
 .item-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
 .action-link { font-size: 11px; color: #268bd2; cursor: pointer; background: none; border: none; text-decoration: underline; padding: 0; }
 .action-link.del { color: #dc322f; }

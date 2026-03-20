@@ -1,18 +1,16 @@
 {
   "manifest_version": 3,
   "name": "极简随手记 Pro",
-  "version": "1.1.0",
-  "description": "灵感闪现，随时记录。支持云同步、Markdown 导出及右键采集。",
+  "version": "1.2.0",
+  "description": "灵感闪现，随时记录。自建后端版，响应更快。",
   "permissions": [
     "contextMenus",
     "storage",
-    "notifications",
-    "identity"
+    "notifications"
   ],
   "host_permissions": [
-    "https://*.firestore.googleapis.com/*",
-    "https://*.firebase.google.com/*",
-    "https://www.google-analytics.com/*"
+    "https://api.oneday.ren/*",
+    "https://umami.oneday.ren/*"
   ],
   "background": {
     "service_worker": "background.js",
