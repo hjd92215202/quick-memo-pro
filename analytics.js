@@ -1,23 +1,29 @@
 import { UMAMI_ID, UMAMI_URL } from './server-config.js';
 
 /**
- * 发送事件到 Umami 统计
- * @param {string} eventName 事件名称
- * @param {object} params 附加参数 (可选)
+ * 内部统一上报函数 (确保不简化原本逻辑，增加类型支持)
+ * @param {'event'|'view'} type 上报类型
+ * @param {string} name 事件名或页面路径
+ * @param {object} params 附加数据
  */
-export async function trackEvent(eventName, params = {}) {
+async function collect(type, name, params = {}) {
   try {
-    // Umami v2 API 要求 payload 必须包含以下结构
+    // Umami v2 API 规范：外层 type 建议统一使用 "event"
+    // 通过 payload 内部是否有 name 字段来区分 PageView 和 Event
     const payload = {
-      type: "event",
+      type: "event", 
       payload: {
         website: UMAMI_ID,        // 网站 ID
-        url: "/extension-popup",  // 模拟路径，方便在后台查看页面分布
+        // 如果是 view 类型，url 使用传入的路径；如果是 event 类型，固定模拟一个上下文路径
+        url: type === "view" ? name : "/extension-popup", 
         hostname: "oneday.ren",   // 重要：必须与 Umami 后台设置的域名一致
-        name: eventName,          // 重要：Umami v2 必须使用 name 字段
-        data: params,             // 重要：Umami v2 必须使用 data 字段
+        // 【核心修复】：如果是 view 类型，name 必须传空字符串，才会增加“访客”计数
+        name: type === "event" ? name : "", 
+        // 只有 event 类型才发送具体的业务数据
+        data: type === "event" ? params : undefined,    
         language: navigator.language || "zh-CN",
-        screen: `${window.screen.width}x${window.screen.height}`
+        screen: `${window.screen.width}x${window.screen.height}`,
+        referrer: "https://oneday.ren/" // 模拟来源，有助于激活访客会话
       }
     };
 
@@ -25,21 +31,38 @@ export async function trackEvent(eventName, params = {}) {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        // 显式指定 User-Agent 确保 Umami 能解析出浏览器和设备信息
+        // 指定 User-Agent 以便 Umami 解析浏览器和操作系统信息
         'User-Agent': navigator.userAgent 
       },
       body: JSON.stringify(payload),
     });
 
     if (response.ok) {
-      console.log(`📊 Umami Tracked: [${eventName}]`);
+      // 优化控制台日志，方便通过图标区分
+      const logType = type === 'event' ? '⚡️ Action' : '📄 PageView';
+      console.log(`📊 Umami ${logType} Recorded: [${name}]`);
     } else {
-      // 如果报错，尝试读取错误详情
       const errText = await response.text();
       console.warn(`📊 Umami Warning: ${response.status} - ${errText}`);
     }
   } catch (e) {
-    // 统计逻辑不应干扰业务逻辑
     console.error('📊 Umami Network Error:', e);
   }
+}
+
+/**
+ * 发送事件到 Umami 统计
+ * @param {string} eventName 事件名称
+ * @param {object} params 附加参数 (可选)
+ */
+export async function trackEvent(eventName, params = {}) {
+  await collect("event", eventName, params);
+}
+
+/**
+ * 发送页面浏览记录 (核心修复：调用此函数将使主面板“访客”计数增加)
+ * @param {string} path 模拟路径 (例如 "/popup")
+ */
+export async function trackView(path = "/extension-popup") {
+  await collect("view", path);
 }

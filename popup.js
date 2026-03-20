@@ -1,5 +1,5 @@
 import { API_BASE, getAuthToken, setAuthToken, logout } from './server-config.js';
-import { trackEvent } from './analytics.js';
+import { trackEvent, trackView } from './analytics.js';
 
 // --- 全局交互状态 ---
 let memoToUnlock = null; // 存储当前正在尝试解锁的记录对象
@@ -62,7 +62,7 @@ function showToast(msg, type = 'info') {
  */
 async function initView() {
   // 统计页面访问
-  trackEvent('view_popup');
+  trackView('/popup');
   
   const token = await getAuthToken();
   
