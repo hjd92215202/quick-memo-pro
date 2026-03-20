@@ -5,17 +5,24 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- 全局提示挂载点 (替代 alert) -->
+  <div id="toast-container"></div>
+
   <!-- 1. 登录界面 -->
   <div id="login-view" class="view-container" style="display: none;">
-    <div class="memo-container">
-      <h3>验证邮箱</h3>
+    <div class="memo-container login-card">
+      <div class="brand">随手记<span>Pro</span></div>
+      <p class="subtitle">让灵感在云端无缝同步</p>
+      
       <input type="email" id="email-input" placeholder="输入邮箱地址" class="form-input">
+      
       <div id="otp-group" style="display: none; margin-top: 10px;">
         <input type="text" id="code-input" placeholder="6位验证码" class="form-input">
       </div>
-      <div class="actions">
-        <button id="send-code-btn">获取验证码</button>
-        <button id="login-btn" style="display: none;">验证登录</button>
+      
+      <div class="actions-vertical">
+        <button id="send-code-btn" class="primary-btn">获取验证码</button>
+        <button id="login-btn" class="primary-btn btn-success" style="display: none;">验证并登录</button>
       </div>
     </div>
   </div>
@@ -25,40 +32,63 @@
     <div class="memo-container">
       <div class="user-header">
         <span id="user-email"></span>
-        <div>
-          <button id="reset-pwd-link" class="action-link" style="margin-right:8px">主密码</button>
-          <button id="logout-link" class="action-link">退出</button>
+        <div class="header-tools">
+          <button id="reset-pwd-link" class="action-link" title="安全设置">🔐 主密码</button>
+          <button id="logout-link" class="action-link" title="退出登录">🚪 退出</button>
         </div>
       </div>
-      <textarea id="memo-input" placeholder="输入灵感... (Ctrl+Enter保存)" autofocus></textarea>
+      
+      <textarea id="memo-input" placeholder="捕捉此刻的想法... (Ctrl+Enter保存)" autofocus></textarea>
+      
       <div class="actions">
-        <label class="lock-toggle">
+        <label class="lock-toggle" title="保存后需主密码查看">
           <input type="checkbox" id="lock-checkbox"> 
-          <span id="lock-icon">🔓</span> 敏感
+          <span class="lock-icon-styled"></span> 敏感
         </label>
         <span id="char-count">0 字 / 2万字</span>
-        <button id="save-btn">保存记录</button>
+        <button id="save-btn" class="primary-btn mini-btn">保存记录</button>
       </div>
     </div>
 
     <div class="recent-title">
-      最近记录
-      <button id="export-md-btn">📤 导出 MD</button>
+      <span>最近记录</span>
+      <button id="export-md-btn" class="secondary-btn">📤 导出 MD</button>
     </div>
+    
     <ul id="memo-list"></ul>
   </div>
 
-  <!-- 3. 主密码设置/重置弹窗 -->
-  <div id="password-setup-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h4 id="setup-title">设置主密码</h4>
-      <p style="font-size:10px; color:#666">重置需先获取邮箱验证码</p>
-      <input type="text" id="setup-code-input" placeholder="验证码" class="form-input">
-      <input type="password" id="setup-pwd-input" placeholder="新主密码" class="form-input">
-      <div class="modal-actions">
-        <button id="get-setup-code-btn" class="secondary-btn">获取验证码</button>
-        <button id="save-pwd-btn">保存密码</button>
-        <button id="close-setup-btn" class="action-link">取消</button>
+  <!-- 3. 主密码设置/重置弹窗 (Modal) -->
+  <div id="password-setup-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h4>安全设置</h4>
+      <p class="modal-hint">设置主密码后可锁定单条记录，重置需验证码</p>
+      
+      <div class="input-group">
+        <div class="input-with-action">
+          <input type="text" id="setup-code-input" placeholder="验证码" class="form-input">
+          <button id="get-setup-code-btn" class="mini-btn">获取</button>
+        </div>
+        <input type="password" id="setup-pwd-input" placeholder="设置新主密码" class="form-input">
+      </div>
+      
+      <div class="modal-footer">
+        <button id="save-pwd-btn" class="primary-btn btn-success">确认保存</button>
+        <button id="close-setup-btn" class="text-btn">返回</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 验证主密码弹窗 (替代 prompt) -->
+  <div id="password-verify-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h4>查看敏感内容</h4>
+      <p class="modal-hint">请输入主密码解锁该条记录</p>
+      <input type="password" id="verify-pwd-input" placeholder="主密码" class="form-input" autofocus>
+      
+      <div class="modal-footer">
+        <button id="confirm-verify-btn" class="primary-btn">立即解锁</button>
+        <button id="close-verify-btn" class="text-btn">取消</button>
       </div>
     </div>
   </div>
