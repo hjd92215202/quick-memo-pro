@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="memo-container">
+    <textarea id="memo-input" placeholder="输入灵感... (Ctrl+Enter保存)" autofocus></textarea>
+    <div class="actions">
+      <span id="char-count">0 字</span>
+      <button id="save-btn">保存记录</button>
+    </div>
+  </div>
+
+  <div class="recent-title">
+    最近记录
+    <button id="export-md-btn">📤 导出 MD</button>
+  </div>
+  
+  <ul id="memo-list"></ul>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
