@@ -19,17 +19,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent; /* 轨道透明，不产生背景条 */
+  background: transparent; /* 轨道透明 */
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12); /* 默认半透明灰色 */
+  background: rgba(0, 0, 0, 0.12); /* 半透明滑块 */
   border-radius: 10px;
-  border: 1px solid transparent; /* 留出间距感 */
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary); /* 悬停时变为主色，提供交互感 */
+  background: var(--primary); /* 悬停时颜色加深 */
 }
 
 body { 
@@ -38,7 +37,7 @@ body {
   margin: 0; 
   background: var(--bg); 
   padding: 12px; 
-  padding-right: 8px; /* 为自定义滚动条留出视觉空间 */
+  padding-right: 8px; /* 为自定义滚动条预留空间 */
   color: var(--text-main); 
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -66,6 +65,24 @@ body {
   padding: 14px; 
   margin-bottom: 15px; 
   transition: transform 0.3s ease;
+}
+
+/* [新增] 标题输入框专有样式 */
+.title-field {
+  border: none !important;
+  border-bottom: 1px dashed var(--border) !important;
+  border-radius: 0 !important;
+  padding: 8px 0 !important;
+  margin-bottom: 8px !important;
+  font-weight: bold;
+  font-size: 15px !important;
+  background: transparent !important;
+  width: 100%;
+}
+.title-field:focus {
+  border-bottom-style: solid !important;
+  border-bottom-color: var(--primary) !important;
+  box-shadow: none !important;
 }
 
 textarea { 
@@ -203,6 +220,7 @@ input:checked + .lock-icon-styled::before { content: '🔒'; }
 }
 
 ul { list-style: none; padding: 0; margin: 0; }
+
 .memo-item { 
   background: rgba(255,255,255,0.7); 
   padding: 14px; 
@@ -213,6 +231,15 @@ ul { list-style: none; padding: 0; margin: 0; }
   transition: all 0.2s;
 }
 .memo-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); background: #fff; }
+
+/* [新增] 列表中标题的展示样式 */
+.memo-title-display {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--primary);
+  margin-bottom: 6px;
+  display: block;
+}
 
 .memo-content { white-space: pre-wrap; word-break: break-all; font-size: 13.5px; line-height: 1.6; color: #444; }
 .memo-content.is-locked { 
